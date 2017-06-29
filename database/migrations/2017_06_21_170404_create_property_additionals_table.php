@@ -41,7 +41,7 @@ class CreatePropertyAdditionalsTable extends Migration
             $table->string('PropertySubType')->nullable();
             $table->text('PublicAddress')->nullable();
             $table->string('PublicAddressYN')->nullable();
-            $table->string('PublicRemarks')->nullable();
+            $table->longText('PublicRemarks')->nullable();
             $table->string('ListAgentMLSID')->nullable();
             $table->string('ListAgentFullName')->nullable();
             $table->string('ListOfficeName')->nullable();

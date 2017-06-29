@@ -10,7 +10,9 @@ use App\PropertyFeature;
 use App\PropertyFinancialDetails;
 use App\PropertyImage;
 use App\PropertyInteriorFeature;
+use App\PropertyLatLong;
 use App\PropertyLocation;
+use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use \PHRETS\Configuration;
@@ -26,6 +28,40 @@ class SearchController extends Controller
     public function search()
     {
         $city = 'MOAPA';
+        $cityArray = array(
+            'ALAMO' => 'Alamo',
+            'ARMAGOSA' => 'Amargosa',
+            'BEATTY' => 'Beatty',
+            'BLUEDIAM' => 'Blue Diamond',
+            'BOULDERC' => 'Boulder City',
+            'CALIENTE' => 'Caliente',
+            'CALNEVAR' => 'Cal-Nev-Ari',
+            'COLDCRK' => 'Cold Creek',
+            'ELY' => 'Ely',
+            'GLENDALE' => 'Glendale',
+            'GOODSPRG' => 'Goodsprings',
+            'HENDERSON' => 'Henderson',
+            'INDIANSP' => 'Indian Springs',
+            'JEAN' => 'Jean',
+            'LASVEGAS' => 'Las Vegas',
+            'LAUGHLIN' => 'Laughlin',
+            'LOGANDAL' => 'Logandale',
+            'MCGILL' => 'Mc Gill',
+            'MESQUITE' => 'Mesquite',
+            'MOAPA' => 'Moapa',
+            'MTNSPRG' => 'Mountain Spring',
+            'NORTHLAS' => 'North Las Vegas',
+            'OTHER' => 'Other',
+            'OVERTON' => 'Overton',
+            'PAHRUMP' => 'Pahrump',
+            'PALMGRDNS' => 'Palm Gardens',
+            'PANACA' => 'Panaca',
+            'PIOCHE' => 'Pioche',
+            'SANDYVLY' => 'Sandy Valley',
+            'SEARCHLT' => 'Searchlight',
+            'TONOPAH' => 'Tonopah',
+            'URSINE' => 'Ursine'
+        );
         try{
             $config = Configuration::load([
                 'login_url' => env('RETS_LOGIN_URL'),
@@ -116,7 +152,7 @@ class SearchController extends Controller
                                         $propertyImage->save();
                                     }
                                 } else {
-                                    Log::info('Photo Error !! '.$photo->getError());
+                                    Log::info('Photo Error !! '.json_encode($photo->getError()));
                                 }
                             } catch (\Exception $errPhoto) {
                                 Log::info('Photo Error Catch !! '.$errPhoto->getMessage());
@@ -438,15 +474,64 @@ class SearchController extends Controller
                             $propertylocation->TaxDistrict = $value['TaxDistrict'];
                             $propertylocation->save();
                         }
+                        //Property Lat Long
+                        $latlong = PropertyLatLong::where('property_details_id',$propertyDeatils->id)->first();
+                        if($latlong == '' && $value['PublicAddressYN'] == 1 && $value['PublicAddress'] != ''){
+                            try{
+                                $formattedAddr = str_replace(' ', '+', $value['PublicAddress']);
+                                $final_address = $formattedAddr . '+' . $value['PostalCode'];
+                                $client = new Client();
+                                $geocodeFromAddr = $client->request('GET','https://maps.googleapis.com/maps/api/geocode/json?address=' . $final_address . '&key='.env('GOOGLE_API_KEY'));
+                                if($geocodeFromAddr->getStatusCode() == 200){
+                                    $output = json_decode($geocodeFromAddr->getBody());
+                                    $data['formatted_address'] = $data['latitude'] = $data['longitude'] = '';
+                                    if (isset($output->results[0]->geometry->location->lat) && $output->results[0]->geometry->location->lat != '') {
+                                        $data['latitude'] = $output->results[0]->geometry->location->lat;
+                                    }
+                                    if (isset($output->results[0]->geometry->location->lng) && $output->results[0]->geometry->location->lng != '') {
+                                        $data['longitude'] = $output->results[0]->geometry->location->lng;
+                                    }
+                                    if (isset($output->results[0]->formatted_address) && $output->results[0]->formatted_address
+                                        != ''
+                                    ) {
+                                        $data['formatted_address'] = $output->results[0]->formatted_address;
+                                    }
+                                    //Return latitude and longitude of the given address
+                                    if (stripos($data['formatted_address'], $cityArray[$city]) !== false) {
+                                        if ($latlong) {
+                                            $latlong->MLSNumber = $value['MLSNumber'];
+                                            $latlong->latitude = $data['latitude'];
+                                            $latlong->longitude = $data['longitude'];
+                                            $latlong->FormatedAddress = $data['formatted_address'];
+                                            $latlong->save();
+                                        } else {
+                                            $latlong = new PropertyLatLong();
+                                            $latlong->property_details_id = $propertyDeatils->id;
+                                            $latlong->Matrix_Unique_ID = $value['Matrix_Unique_ID'];
+                                            $latlong->MLSNumber = $value['MLSNumber'];
+                                            $latlong->latitude = $data['latitude'];
+                                            $latlong->longitude = $data['longitude'];
+                                            $latlong->FormatedAddress = $data['formatted_address'];
+                                            $latlong->save();
+                                        }
+                                    }
+                                }
+                            } catch (\Exception $eGoogle){
+                                Log::info('ERROR GOOGLE API !! '.$eGoogle->getMessage());
+                            }
+                        }
                     } catch (\Exception $forError){
                         Log::info('foreach Error !! '.$forError->getMessage());
                     }
                 }
+                $rets->Disconnect();
+                $cityList->status = 0 ;
+                $cityList->save();
             } else {
-                dd('no');
+                Log::info('Login Failed');
             }
-        } catch (\Exception $e){
-            dd($e->getMessage());
+        } catch (\Exception $main){
+            Log::info('Controller Main !! '.$main->getMessage());
         }
     }
 }

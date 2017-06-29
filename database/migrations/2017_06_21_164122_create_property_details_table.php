@@ -25,6 +25,7 @@ class CreatePropertyDetailsTable extends Migration
             $table->string('BathsHalf')->nullable();
             $table->string('BathsFull')->nullable();
             $table->string('NumAcres')->nullable();
+            $table->string('SqFtTotal')->nullable();
             $table->string('StreetNumber')->nullable();
             $table->string('StreetName')->nullable();
             $table->string('City')->nullable();
